@@ -8,7 +8,7 @@ import esbuild from 'rollup-plugin-esbuild'
 const production = !process.env.ROLLUP_WATCH;
 
 export default {
-  input: 'src/main.js', 
+  input: 'src/App.svelte', 
   output: {
     format: 'es',
     file: 'build/bundle.js', 

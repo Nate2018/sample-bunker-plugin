@@ -12,7 +12,7 @@ const production = !process.env.ROLLUP_WATCH
 //
 const emitCss = false
 
-const cmp = 'Foo'
+const cmp = 'App'
 
 export default {
   input: `src/${cmp}.svelte`,
