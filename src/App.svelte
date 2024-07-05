@@ -25,10 +25,10 @@
         }
 </script>
 
-<div class="flex flex-col justify-center bg-gray-700 rounded-lg px-12 mt-2">
+<div class="flex flex-col justify-center bg-gray-700 rounded-lg px-12 mt-2 mb-4">
 <p class="text-lg"> ermmm! </p>
 <div class="flex">
-    <button class="bg-slate-900 text-white font-bold py-2 px-4 rounded" on:click={() => launchViewer(text)}>Launch Page</button>
-    <input class="bg-slate-900 text-white font-bold py-2 px-4 rounded" bind:value={text} type="text" />
+    <button class="bg-green-600 text-white font-bold py-2 px-4 rounded ml-2" on:click={() => launchViewer(text)}>Launch Page</button>
+    <input class="bg-indigo-500 text-white font-bold py-2 px-4 rounded" bind:value={text} type="text" />
 </div>
 </div>
