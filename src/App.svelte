@@ -1,6 +1,5 @@
 <script>
-    export const name = 'World';
-    export const id = 'world';
-  </script>
+
+</script>
   
   <p>Hello World</p>

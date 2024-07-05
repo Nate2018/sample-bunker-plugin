@@ -111,18 +111,6 @@ var app = (function () {
 
 	const flush_callbacks = [];
 
-	const resolved_promise = /* @__PURE__ */ Promise.resolve();
-
-	let update_scheduled = false;
-
-	/** @returns {void} */
-	function schedule_update() {
-		if (!update_scheduled) {
-			update_scheduled = true;
-			resolved_promise.then(flush);
-		}
-	}
-
 	/** @returns {void} */
 	function add_render_callback(fn) {
 		render_callbacks.push(fn);
@@ -195,7 +183,6 @@ var app = (function () {
 		while (flush_callbacks.length) {
 			flush_callbacks.pop()();
 		}
-		update_scheduled = false;
 		seen_callbacks.clear();
 		set_current_component(saved_component);
 	}
@@ -305,16 +292,6 @@ var app = (function () {
 		}
 	}
 
-	/** @returns {void} */
-	function make_dirty(component, i) {
-		if (component.$$.dirty[0] === -1) {
-			dirty_components.push(component);
-			schedule_update();
-			component.$$.dirty.fill(0);
-		}
-		component.$$.dirty[(i / 31) | 0] |= 1 << i % 31;
-	}
-
 	// TODO: Document the other params
 	/**
 	 * @param {SvelteComponent} component
@@ -361,19 +338,8 @@ var app = (function () {
 			root: options.target || parent_component.$$.root
 		});
 		append_styles && append_styles($$.root);
-		let ready = false;
-		$$.ctx = instance
-			? instance(component, options.props || {}, (i, ret, ...rest) => {
-					const value = rest.length ? rest[0] : ret;
-					if ($$.ctx && not_equal($$.ctx[i], ($$.ctx[i] = value))) {
-						if (!$$.skip_bound && $$.bound[i]) $$.bound[i](value);
-						if (ready) make_dirty(component, i);
-					}
-					return ret;
-			  })
-			: [];
+		$$.ctx = [];
 		$$.update();
-		ready = true;
 		run_all($$.before_update);
 		// `false` as a special case of no DOM component
 		$$.fragment = create_fragment ? create_fragment($$.ctx) : false;
@@ -495,28 +461,20 @@ var app = (function () {
 		};
 	}
 
-	function instance($$self, $$props, $$invalidate) {
-		const name = 'World';
-		const id = 'world';
-		return [name, id];
-	}
-
 	class App extends SvelteComponent {
 		constructor(options) {
 			super();
-			init(this, options, instance, create_fragment, safe_not_equal, { name: 0, id: 1 });
-		}
-
-		get name() {
-			return this.$$.ctx[0];
-		}
-
-		get id() {
-			return this.$$.ctx[1];
+			init(this, options, null, create_fragment, safe_not_equal, {});
 		}
 	}
 
 	const app = new App({
+	  name: 'Viewer',
+	  id: 'cattn.viewer',
+	  version: '1.0.0',
+	  author: 'cattn',
+	  description: 'Svelte viewer',
+
 	  target: document.body,
 	  props: {
 	    name: 'Viewer',
