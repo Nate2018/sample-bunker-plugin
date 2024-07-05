@@ -25,10 +25,10 @@
         }
 </script>
 
-<div class="flex flex-col justify-center bg-gray-700 rounded-lg px-12">
-<p class="text-sm caret-yellow-500">{real}</p>
+<div class="flex flex-col justify-center bg-gray-700 rounded-lg px-12 mt-2">
 <p class="text-lg"> ermmm! </p>
-<button class="bg-slate-900 text-white font-bold py-2 px-4 rounded" on:click={() => launchViewer(text)}>Launch Page</button>
-<input class="bg-slate-900 text-white font-bold py-2 px-4 rounded" bind:value={text} type="text" />
-<Skull />
+<div class="flex">
+    <button class="bg-slate-900 text-white font-bold py-2 px-4 rounded" on:click={() => launchViewer(text)}>Launch Page</button>
+    <input class="bg-slate-900 text-white font-bold py-2 px-4 rounded" bind:value={text} type="text" />
+</div>
 </div>
