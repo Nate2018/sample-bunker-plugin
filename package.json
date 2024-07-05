@@ -12,6 +12,7 @@
   "dependencies": {
     "@rollup/plugin-commonjs": "^26.0.1",
     "@rollup/plugin-replace": "^5.0.7",
+    "rollup-plugin-css-only": "^4.5.2",
     "rollup-plugin-esbuild": "^6.1.1"
   }
 }
