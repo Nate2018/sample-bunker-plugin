@@ -3,7 +3,7 @@
     
 </script>
 
-<div class="flex justify-center bg-gray-900 rounded-lg p-4">
+<div class="flex justify-center bg-gray-300 rounded-lg px-12">
 <p class="text-sm">{real}</p>
 <p class="text-lg"> ermmm! </p>
 </div>
