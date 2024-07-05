@@ -545,10 +545,10 @@ function create_fragment(ctx) {
 			t3 = space();
 			input = element("input");
 			attr(p, "class", "text-lg");
-			attr(button, "class", "bg-green-600 text-white font-bold py-2 px-4 rounded ml-2");
-			attr(input, "class", "bg-indigo-500 text-white font-bold py-2 px-4 rounded");
+			attr(button, "class", "bg-gray-900 outline-gray-950 text-white font-bold py-2 px-4 rounded mr-2");
+			attr(input, "class", "bg-gray-900 outline-gray-950 text-white font-bold py-2 px-4 rounded");
 			attr(input, "type", "text");
-			attr(div0, "class", "flex");
+			attr(div0, "class", "flex flex-col");
 			attr(div1, "class", "flex flex-col justify-center bg-gray-700 rounded-lg px-12 mt-2 mb-4");
 		},
 		m(target, anchor) {
