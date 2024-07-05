@@ -1,7 +1,6 @@
 <script>
     let real = "real";
     import { Skull } from 'lucide-svelte';
-    import { Button } from "bits-ui";
     let text = "";
 
     function launchViewer(url) {
@@ -29,7 +28,7 @@
 <div class="flex justify-center bg-gray-300 rounded-lg px-12">
 <p class="text-sm">{real}</p>
 <p class="text-lg"> ermmm! </p>
-<Button on:click={() => launchViewer(text)}>Launch Page</Button>
+<button on:click={() => launchViewer(text)}>Launch Page</button>
 <input bind:value={text} type="text" />
 <Skull />
 </div>
