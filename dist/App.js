@@ -1,5 +1,5 @@
 /** @returns {void} */
-function noop() {}
+function noop$1() {}
 
 /**
  * @template T
@@ -46,6 +46,17 @@ function safe_not_equal(a, b) {
 /** @returns {boolean} */
 function is_empty(obj) {
 	return Object.keys(obj).length === 0;
+}
+
+function subscribe(store, ...callbacks) {
+	if (store == null) {
+		for (const callback of callbacks) {
+			callback(undefined);
+		}
+		return noop$1;
+	}
+	const unsub = store.subscribe(...callbacks);
+	return unsub.unsubscribe ? () => unsub.unsubscribe() : unsub;
 }
 
 function create_slot(definition, ctx, $$scope, fn) {
@@ -119,6 +130,10 @@ function compute_rest_props(props, keys) {
 	keys = new Set(keys);
 	for (const k in props) if (!keys.has(k) && k[0] !== '$') rest[k] = props[k];
 	return rest;
+}
+
+function action_destroyer(action_result) {
+	return action_result && is_function(action_result.destroy) ? action_result.destroy : noop$1;
 }
 
 /**
@@ -197,6 +212,18 @@ function empty() {
 }
 
 /**
+ * @param {EventTarget} node
+ * @param {string} event
+ * @param {EventListenerOrEventListenerObject} handler
+ * @param {boolean | AddEventListenerOptions | EventListenerOptions} [options]
+ * @returns {() => void}
+ */
+function listen(node, event, handler, options) {
+	node.addEventListener(event, handler, options);
+	return () => node.removeEventListener(event, handler, options);
+}
+
+/**
  * @param {Element} node
  * @param {string} attribute
  * @param {string} [value]
@@ -205,6 +232,41 @@ function empty() {
 function attr(node, attribute, value) {
 	if (value == null) node.removeAttribute(attribute);
 	else if (node.getAttribute(attribute) !== value) node.setAttribute(attribute, value);
+}
+/**
+ * List of attributes that should always be set through the attr method,
+ * because updating them through the property setter doesn't work reliably.
+ * In the example of `width`/`height`, the problem is that the setter only
+ * accepts numeric values, but the attribute can also be set to a string like `50%`.
+ * If this list becomes too big, rethink this approach.
+ */
+const always_set_through_set_attribute = ['width', 'height'];
+
+/**
+ * @param {Element & ElementCSSInlineStyle} node
+ * @param {{ [x: string]: string }} attributes
+ * @returns {void}
+ */
+function set_attributes(node, attributes) {
+	// @ts-ignore
+	const descriptors = Object.getOwnPropertyDescriptors(node.__proto__);
+	for (const key in attributes) {
+		if (attributes[key] == null) {
+			node.removeAttribute(key);
+		} else if (key === 'style') {
+			node.style.cssText = attributes[key];
+		} else if (key === '__value') {
+			/** @type {any} */ (node).value = node[key] = attributes[key];
+		} else if (
+			descriptors[key] &&
+			descriptors[key].set &&
+			always_set_through_set_attribute.indexOf(key) === -1
+		) {
+			node[key] = attributes[key];
+		} else {
+			attr(node, key, attributes[key]);
+		}
+	}
 }
 
 /**
@@ -219,11 +281,47 @@ function set_svg_attributes(node, attributes) {
 }
 
 /**
+ * @param {Record<string, unknown>} data_map
+ * @returns {void}
+ */
+function set_custom_element_data_map(node, data_map) {
+	Object.keys(data_map).forEach((key) => {
+		set_custom_element_data(node, key, data_map[key]);
+	});
+}
+
+/**
+ * @returns {void} */
+function set_custom_element_data(node, prop, value) {
+	const lower = prop.toLowerCase(); // for backwards compatibility with existing behavior we do lowercase first
+	if (lower in node) {
+		node[lower] = typeof node[lower] === 'boolean' && value === '' ? true : value;
+	} else if (prop in node) {
+		node[prop] = typeof node[prop] === 'boolean' && value === '' ? true : value;
+	} else {
+		attr(node, prop, value);
+	}
+}
+
+/**
+ * @param {string} tag
+ */
+function set_dynamic_element_data(tag) {
+	return /-/.test(tag) ? set_custom_element_data_map : set_attributes;
+}
+
+/**
  * @param {Element} element
  * @returns {ChildNode[]}
  */
 function children(element) {
 	return Array.from(element.childNodes);
+}
+
+/**
+ * @returns {void} */
+function set_input_value(input, value) {
+	input.value = value == null ? '' : value;
 }
 
 /**
@@ -253,6 +351,22 @@ let current_component;
 /** @returns {void} */
 function set_current_component(component) {
 	current_component = component;
+}
+
+// TODO figure out if we still want to support
+// shorthand events, or if we want to implement
+// a real bubbling mechanism
+/**
+ * @param component
+ * @param event
+ * @returns {void}
+ */
+function bubble(component, event) {
+	const callbacks = component.$$.callbacks[event.type];
+	if (callbacks) {
+		// @ts-ignore
+		callbacks.slice().forEach((fn) => fn.call(this, event));
+	}
 }
 
 const dirty_components = [];
@@ -384,6 +498,25 @@ const outroing = new Set();
 let outros;
 
 /**
+ * @returns {void} */
+function group_outros() {
+	outros = {
+		r: 0,
+		c: [],
+		p: outros // parent group
+	};
+}
+
+/**
+ * @returns {void} */
+function check_outros() {
+	if (!outros.r) {
+		run_all(outros.c);
+	}
+	outros = outros.p;
+}
+
+/**
  * @param {import('./private.js').Fragment} block
  * @param {0 | 1} [local]
  * @returns {void}
@@ -408,8 +541,14 @@ function transition_out(block, local, detach, callback) {
 		outroing.add(block);
 		outros.c.push(() => {
 			outroing.delete(block);
+			if (callback) {
+				if (detach) block.d(1);
+				callback();
+			}
 		});
 		block.o(local);
+	} else if (callback) {
+		callback();
 	}
 }
 
@@ -567,7 +706,7 @@ function init(
 		ctx: [],
 		// state
 		props,
-		update: noop,
+		update: noop$1,
 		not_equal,
 		bound: blank_object(),
 		// lifecycle
@@ -645,7 +784,7 @@ class SvelteComponent {
 	/** @returns {void} */
 	$destroy() {
 		destroy_component(this, 1);
-		this.$destroy = noop;
+		this.$destroy = noop$1;
 	}
 
 	/**
@@ -656,7 +795,7 @@ class SvelteComponent {
 	 */
 	$on(type, callback) {
 		if (!is_function(callback)) {
-			return noop;
+			return noop$1;
 		}
 		const callbacks = this.$$.callbacks[type] || (this.$$.callbacks[type] = []);
 		callbacks.push(callback);
@@ -722,7 +861,7 @@ function get_each_context(ctx, list, i) {
 }
 
 // (35:4) <svelte:element this={tag} {...attrs}/>
-function create_dynamic_element(ctx) {
+function create_dynamic_element$1(ctx) {
 	let svelte_element;
 	let svelte_element_levels = [/*attrs*/ ctx[12]];
 	let svelte_element_data = {};
@@ -754,7 +893,7 @@ function create_dynamic_element(ctx) {
 function create_each_block(ctx) {
 	let previous_tag = /*tag*/ ctx[11];
 	let svelte_element_anchor;
-	let svelte_element = /*tag*/ ctx[11] && create_dynamic_element(ctx);
+	let svelte_element = /*tag*/ ctx[11] && create_dynamic_element$1(ctx);
 
 	return {
 		c() {
@@ -768,13 +907,13 @@ function create_each_block(ctx) {
 		p(ctx, dirty) {
 			if (/*tag*/ ctx[11]) {
 				if (!previous_tag) {
-					svelte_element = create_dynamic_element(ctx);
+					svelte_element = create_dynamic_element$1(ctx);
 					previous_tag = /*tag*/ ctx[11];
 					svelte_element.c();
 					svelte_element.m(svelte_element_anchor.parentNode, svelte_element_anchor);
 				} else if (safe_not_equal(previous_tag, /*tag*/ ctx[11])) {
 					svelte_element.d(1);
-					svelte_element = create_dynamic_element(ctx);
+					svelte_element = create_dynamic_element$1(ctx);
 					previous_tag = /*tag*/ ctx[11];
 					svelte_element.c();
 					svelte_element.m(svelte_element_anchor.parentNode, svelte_element_anchor);
@@ -797,7 +936,7 @@ function create_each_block(ctx) {
 	};
 }
 
-function create_fragment$2(ctx) {
+function create_fragment$3(ctx) {
 	let svg;
 	let each_1_anchor;
 	let svg_stroke_width_value;
@@ -935,7 +1074,7 @@ function create_fragment$2(ctx) {
 	};
 }
 
-function instance$1($$self, $$props, $$invalidate) {
+function instance$3($$self, $$props, $$invalidate) {
 	const omit_props_names = ["name","color","size","strokeWidth","absoluteStrokeWidth","iconNode"];
 	let $$restProps = compute_rest_props($$props, omit_props_names);
 	let { $$slots: slots = {}, $$scope } = $$props;
@@ -983,7 +1122,7 @@ class Icon extends SvelteComponent {
 	constructor(options) {
 		super();
 
-		init(this, options, instance$1, create_fragment$2, safe_not_equal, {
+		init(this, options, instance$3, create_fragment$3, safe_not_equal, {
 			name: 0,
 			color: 1,
 			size: 2,
@@ -996,7 +1135,7 @@ class Icon extends SvelteComponent {
 
 /* node_modules\lucide-svelte\dist\icons\skull.svelte generated by Svelte v4.2.18 */
 
-function create_default_slot(ctx) {
+function create_default_slot$1(ctx) {
 	let current;
 	const default_slot_template = /*#slots*/ ctx[2].default;
 	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[3], null);
@@ -1043,13 +1182,13 @@ function create_default_slot(ctx) {
 	};
 }
 
-function create_fragment$1(ctx) {
+function create_fragment$2(ctx) {
 	let icon;
 	let current;
 	const icon_spread_levels = [{ name: "skull" }, /*$$props*/ ctx[1], { iconNode: /*iconNode*/ ctx[0] }];
 
 	let icon_props = {
-		$$slots: { default: [create_default_slot] },
+		$$slots: { default: [create_default_slot$1] },
 		$$scope: { ctx }
 	};
 
@@ -1097,7 +1236,7 @@ function create_fragment$1(ctx) {
 	};
 }
 
-function instance($$self, $$props, $$invalidate) {
+function instance$2($$self, $$props, $$invalidate) {
 	let { $$slots: slots = {}, $$scope } = $$props;
 
 	const iconNode = [
@@ -1125,11 +1264,970 @@ function instance($$self, $$props, $$invalidate) {
 class Skull extends SvelteComponent {
 	constructor(options) {
 		super();
-		init(this, options, instance, create_fragment$1, safe_not_equal, {});
+		init(this, options, instance$2, create_fragment$2, safe_not_equal, {});
 	}
 }
 
+/**
+ * A utility function that converts a style object to a string.
+ *
+ * @param style - The style object to convert
+ * @returns The style object as a string
+ */
+function styleToString(style) {
+    return Object.keys(style).reduce((str, key) => {
+        if (style[key] === undefined)
+            return str;
+        return str + `${key}:${style[key]};`;
+    }, '');
+}
+
+({
+    type: 'hidden',
+    'aria-hidden': true,
+    hidden: true,
+    tabIndex: -1,
+    style: styleToString({
+        position: 'absolute',
+        opacity: 0,
+        'pointer-events': 'none',
+        margin: 0,
+        transform: 'translateX(-100%)',
+    }),
+});
+
+const subscriber_queue = [];
+
+/**
+ * Creates a `Readable` store that allows reading by subscription.
+ *
+ * https://svelte.dev/docs/svelte-store#readable
+ * @template T
+ * @param {T} [value] initial value
+ * @param {import('./public.js').StartStopNotifier<T>} [start]
+ * @returns {import('./public.js').Readable<T>}
+ */
+function readable(value, start) {
+	return {
+		subscribe: writable(value, start).subscribe
+	};
+}
+
+/**
+ * Create a `Writable` store that allows both updating and reading by subscription.
+ *
+ * https://svelte.dev/docs/svelte-store#writable
+ * @template T
+ * @param {T} [value] initial value
+ * @param {import('./public.js').StartStopNotifier<T>} [start]
+ * @returns {import('./public.js').Writable<T>}
+ */
+function writable(value, start = noop$1) {
+	/** @type {import('./public.js').Unsubscriber} */
+	let stop;
+	/** @type {Set<import('./private.js').SubscribeInvalidateTuple<T>>} */
+	const subscribers = new Set();
+	/** @param {T} new_value
+	 * @returns {void}
+	 */
+	function set(new_value) {
+		if (safe_not_equal(value, new_value)) {
+			value = new_value;
+			if (stop) {
+				// store is ready
+				const run_queue = !subscriber_queue.length;
+				for (const subscriber of subscribers) {
+					subscriber[1]();
+					subscriber_queue.push(subscriber, value);
+				}
+				if (run_queue) {
+					for (let i = 0; i < subscriber_queue.length; i += 2) {
+						subscriber_queue[i][0](subscriber_queue[i + 1]);
+					}
+					subscriber_queue.length = 0;
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param {import('./public.js').Updater<T>} fn
+	 * @returns {void}
+	 */
+	function update(fn) {
+		set(fn(value));
+	}
+
+	/**
+	 * @param {import('./public.js').Subscriber<T>} run
+	 * @param {import('./private.js').Invalidator<T>} [invalidate]
+	 * @returns {import('./public.js').Unsubscriber}
+	 */
+	function subscribe(run, invalidate = noop$1) {
+		/** @type {import('./private.js').SubscribeInvalidateTuple<T>} */
+		const subscriber = [run, invalidate];
+		subscribers.add(subscriber);
+		if (subscribers.size === 1) {
+			stop = start(set, update) || noop$1;
+		}
+		run(value);
+		return () => {
+			subscribers.delete(subscriber);
+			if (subscribers.size === 0 && stop) {
+				stop();
+				stop = null;
+			}
+		};
+	}
+	return { set, update, subscribe };
+}
+
+/**
+ * Derived value store by synchronizing one or more readable stores and
+ * applying an aggregation function over its input values.
+ *
+ * https://svelte.dev/docs/svelte-store#derived
+ * @template {import('./private.js').Stores} S
+ * @template T
+ * @overload
+ * @param {S} stores - input stores
+ * @param {(values: import('./private.js').StoresValues<S>, set: (value: T) => void, update: (fn: import('./public.js').Updater<T>) => void) => import('./public.js').Unsubscriber | void} fn - function callback that aggregates the values
+ * @param {T} [initial_value] - initial value
+ * @returns {import('./public.js').Readable<T>}
+ */
+
+/**
+ * Derived value store by synchronizing one or more readable stores and
+ * applying an aggregation function over its input values.
+ *
+ * https://svelte.dev/docs/svelte-store#derived
+ * @template {import('./private.js').Stores} S
+ * @template T
+ * @overload
+ * @param {S} stores - input stores
+ * @param {(values: import('./private.js').StoresValues<S>) => T} fn - function callback that aggregates the values
+ * @param {T} [initial_value] - initial value
+ * @returns {import('./public.js').Readable<T>}
+ */
+
+/**
+ * @template {import('./private.js').Stores} S
+ * @template T
+ * @param {S} stores
+ * @param {Function} fn
+ * @param {T} [initial_value]
+ * @returns {import('./public.js').Readable<T>}
+ */
+function derived(stores, fn, initial_value) {
+	const single = !Array.isArray(stores);
+	/** @type {Array<import('./public.js').Readable<any>>} */
+	const stores_array = single ? [stores] : stores;
+	if (!stores_array.every(Boolean)) {
+		throw new Error('derived() expects stores as input, got a falsy value');
+	}
+	const auto = fn.length < 2;
+	return readable(initial_value, (set, update) => {
+		let started = false;
+		const values = [];
+		let pending = 0;
+		let cleanup = noop$1;
+		const sync = () => {
+			if (pending) {
+				return;
+			}
+			cleanup();
+			const result = fn(single ? values[0] : values, set, update);
+			if (auto) {
+				set(result);
+			} else {
+				cleanup = is_function(result) ? result : noop$1;
+			}
+		};
+		const unsubscribers = stores_array.map((store, i) =>
+			subscribe(
+				store,
+				(value) => {
+					values[i] = value;
+					pending &= ~(1 << i);
+					if (started) {
+						sync();
+					}
+				},
+				() => {
+					pending |= 1 << i;
+				}
+			)
+		);
+		started = true;
+		sync();
+		return function stop() {
+			run_all(unsubscribers);
+			cleanup();
+			// We need to set this to false because callbacks can still happen despite having unsubscribed:
+			// Callbacks might already be placed in the queue which doesn't know it should no longer
+			// invoke this derived store.
+			started = false;
+		};
+	});
+}
+
+function lightable(value) {
+    function subscribe(run) {
+        run(value);
+        return () => {
+            // don't need to unsub from anything
+        };
+    }
+    return { subscribe };
+}
+
+const hiddenAction = (obj) => {
+    return new Proxy(obj, {
+        get(target, prop, receiver) {
+            return Reflect.get(target, prop, receiver);
+        },
+        ownKeys(target) {
+            return Reflect.ownKeys(target).filter((key) => key !== 'action');
+        },
+    });
+};
+const isFunctionWithParams = (fn) => {
+    return typeof fn === 'function';
+};
+makeElement('empty');
+function makeElement(name, args) {
+    const { stores, action, returned } = {};
+    const derivedStore = (() => {
+        if (stores && returned) {
+            // If stores are provided, create a derived store from them
+            return derived(stores, (values) => {
+                const result = returned(values);
+                if (isFunctionWithParams(result)) {
+                    const fn = (...args) => {
+                        return hiddenAction({
+                            ...result(...args),
+                            [`data-melt-${name}`]: '',
+                            action: action ?? noop,
+                        });
+                    };
+                    fn.action = action ?? noop;
+                    return fn;
+                }
+                return hiddenAction({
+                    ...result,
+                    [`data-melt-${name}`]: '',
+                    action: action ?? noop,
+                });
+            });
+        }
+        else {
+            // If stores are not provided, return a lightable store, for consistency
+            const returnedFn = returned;
+            const result = returnedFn?.();
+            if (isFunctionWithParams(result)) {
+                const resultFn = (...args) => {
+                    return hiddenAction({
+                        ...result(...args),
+                        [`data-melt-${name}`]: '',
+                        action: action ?? noop,
+                    });
+                };
+                resultFn.action = action ?? noop;
+                return lightable(resultFn);
+            }
+            return lightable(hiddenAction({
+                ...result,
+                [`data-melt-${name}`]: '',
+                action: action ?? noop,
+            }));
+        }
+    })();
+    const actionFn = (action ??
+        (() => {
+            /** noop */
+        }));
+    actionFn.subscribe = derivedStore.subscribe;
+    return actionFn;
+}
+
+/**
+ * Executes an array of callback functions with the same arguments.
+ * @template T The types of the arguments that the callback functions take.
+ * @param n array of callback functions to execute.
+ * @returns A new function that executes all of the original callback functions with the same arguments.
+ */
+/**
+ * A no operation function (does nothing)
+ */
+function noop() {
+    //
+}
+
+function omit(obj, ...keys) {
+    const result = {};
+    for (const key of Object.keys(obj)) {
+        if (!keys.includes(key)) {
+            result[key] = obj[key];
+        }
+    }
+    return result;
+}
+
+const defaults = {
+    isDateDisabled: undefined,
+    isDateUnavailable: undefined,
+    value: undefined,
+    preventDeselect: false,
+    numberOfMonths: 1,
+    pagedNavigation: false,
+    weekStartsOn: 0,
+    fixedWeeks: false,
+    calendarLabel: 'Event Date',
+    locale: 'en',
+    minValue: undefined,
+    maxValue: undefined,
+    disabled: false,
+    readonly: false,
+    weekdayFormat: 'narrow',
+};
+
+({
+    isDateDisabled: undefined,
+    isDateUnavailable: undefined,
+    value: undefined,
+    positioning: {
+        placement: 'bottom',
+    },
+    closeOnEscape: true,
+    closeOnOutsideClick: true,
+    onOutsideClick: undefined,
+    preventScroll: false,
+    forceVisible: false,
+    locale: 'en',
+    granularity: undefined,
+    disabled: false,
+    readonly: false,
+    minValue: undefined,
+    maxValue: undefined,
+    weekdayFormat: 'narrow',
+    ...omit(defaults, 'isDateDisabled', 'isDateUnavailable', 'value', 'locale', 'disabled', 'readonly', 'minValue', 'maxValue', 'weekdayFormat'),
+});
+
+function builderActions(node, params) {
+    const unsubs = [];
+    params.builders.forEach((builder) => {
+        const act = builder.action(node);
+        if (act) {
+            unsubs.push(act);
+        }
+    });
+    return {
+        destroy: () => {
+            unsubs.forEach((unsub) => {
+                if (unsub.destroy) {
+                    unsub.destroy();
+                }
+            });
+        },
+    };
+}
+// eslint-disable-next-line ts/no-explicit-any
+function getAttrs(builders) {
+    const attrs = {};
+    builders.forEach((builder) => {
+        Object.keys(builder).forEach((key) => {
+            if (key !== "action") {
+                attrs[key] = builder[key];
+            }
+        });
+    });
+    return attrs;
+}
+
+/* node_modules\bits-ui\dist\bits\button\components\button.svelte generated by Svelte v4.2.18 */
+
+function create_else_block(ctx) {
+	let previous_tag = /*href*/ ctx[1] ? "a" : "button";
+	let svelte_element_anchor;
+	let current;
+	let svelte_element = (/*href*/ ctx[1] ? "a" : "button") && create_dynamic_element_1(ctx);
+
+	return {
+		c() {
+			if (svelte_element) svelte_element.c();
+			svelte_element_anchor = empty();
+		},
+		m(target, anchor) {
+			if (svelte_element) svelte_element.m(target, anchor);
+			insert(target, svelte_element_anchor, anchor);
+			current = true;
+		},
+		p(ctx, dirty) {
+			if (/*href*/ ctx[1] ? "a" : "button") {
+				if (!previous_tag) {
+					svelte_element = create_dynamic_element_1(ctx);
+					previous_tag = /*href*/ ctx[1] ? "a" : "button";
+					svelte_element.c();
+					svelte_element.m(svelte_element_anchor.parentNode, svelte_element_anchor);
+				} else if (safe_not_equal(previous_tag, /*href*/ ctx[1] ? "a" : "button")) {
+					svelte_element.d(1);
+					svelte_element = create_dynamic_element_1(ctx);
+					previous_tag = /*href*/ ctx[1] ? "a" : "button";
+					svelte_element.c();
+					svelte_element.m(svelte_element_anchor.parentNode, svelte_element_anchor);
+				} else {
+					svelte_element.p(ctx, dirty);
+				}
+			} else if (previous_tag) {
+				svelte_element.d(1);
+				svelte_element = null;
+				previous_tag = /*href*/ ctx[1] ? "a" : "button";
+			}
+		},
+		i(local) {
+			if (current) return;
+			transition_in(svelte_element, local);
+			current = true;
+		},
+		o(local) {
+			transition_out(svelte_element, local);
+			current = false;
+		},
+		d(detaching) {
+			if (detaching) {
+				detach(svelte_element_anchor);
+			}
+
+			if (svelte_element) svelte_element.d(detaching);
+		}
+	};
+}
+
+// (11:0) {#if builders && builders.length}
+function create_if_block(ctx) {
+	let previous_tag = /*href*/ ctx[1] ? "a" : "button";
+	let svelte_element_anchor;
+	let current;
+	let svelte_element = (/*href*/ ctx[1] ? "a" : "button") && create_dynamic_element(ctx);
+
+	return {
+		c() {
+			if (svelte_element) svelte_element.c();
+			svelte_element_anchor = empty();
+		},
+		m(target, anchor) {
+			if (svelte_element) svelte_element.m(target, anchor);
+			insert(target, svelte_element_anchor, anchor);
+			current = true;
+		},
+		p(ctx, dirty) {
+			if (/*href*/ ctx[1] ? "a" : "button") {
+				if (!previous_tag) {
+					svelte_element = create_dynamic_element(ctx);
+					previous_tag = /*href*/ ctx[1] ? "a" : "button";
+					svelte_element.c();
+					svelte_element.m(svelte_element_anchor.parentNode, svelte_element_anchor);
+				} else if (safe_not_equal(previous_tag, /*href*/ ctx[1] ? "a" : "button")) {
+					svelte_element.d(1);
+					svelte_element = create_dynamic_element(ctx);
+					previous_tag = /*href*/ ctx[1] ? "a" : "button";
+					svelte_element.c();
+					svelte_element.m(svelte_element_anchor.parentNode, svelte_element_anchor);
+				} else {
+					svelte_element.p(ctx, dirty);
+				}
+			} else if (previous_tag) {
+				svelte_element.d(1);
+				svelte_element = null;
+				previous_tag = /*href*/ ctx[1] ? "a" : "button";
+			}
+		},
+		i(local) {
+			if (current) return;
+			transition_in(svelte_element, local);
+			current = true;
+		},
+		o(local) {
+			transition_out(svelte_element, local);
+			current = false;
+		},
+		d(detaching) {
+			if (detaching) {
+				detach(svelte_element_anchor);
+			}
+
+			if (svelte_element) svelte_element.d(detaching);
+		}
+	};
+}
+
+// (38:1) <svelte:element   this={href ? "a" : "button"}   bind:this={el}   type={href ? undefined : type}   {href}   on:click   on:change   on:keydown   on:keyup   on:mouseenter   on:mouseleave   on:mousedown   on:pointerdown   on:mouseup   on:pointerup   tabindex="0"   {...$$restProps}   {...attrs}  >
+function create_dynamic_element_1(ctx) {
+	let svelte_element;
+	let svelte_element_type_value;
+	let current;
+	let mounted;
+	let dispose;
+	const default_slot_template = /*#slots*/ ctx[7].default;
+	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[6], null);
+
+	let svelte_element_levels = [
+		{
+			type: svelte_element_type_value = /*href*/ ctx[1] ? undefined : /*type*/ ctx[2]
+		},
+		{ href: /*href*/ ctx[1] },
+		{ tabindex: "0" },
+		/*$$restProps*/ ctx[5],
+		/*attrs*/ ctx[4]
+	];
+
+	let svelte_element_data = {};
+
+	for (let i = 0; i < svelte_element_levels.length; i += 1) {
+		svelte_element_data = assign(svelte_element_data, svelte_element_levels[i]);
+	}
+
+	return {
+		c() {
+			svelte_element = element(/*href*/ ctx[1] ? "a" : "button");
+			if (default_slot) default_slot.c();
+			set_dynamic_element_data(/*href*/ ctx[1] ? "a" : "button")(svelte_element, svelte_element_data);
+		},
+		m(target, anchor) {
+			insert(target, svelte_element, anchor);
+
+			if (default_slot) {
+				default_slot.m(svelte_element, null);
+			}
+
+			/*svelte_element_binding_1*/ ctx[29](svelte_element);
+			current = true;
+
+			if (!mounted) {
+				dispose = [
+					listen(svelte_element, "click", /*click_handler_1*/ ctx[18]),
+					listen(svelte_element, "change", /*change_handler_1*/ ctx[19]),
+					listen(svelte_element, "keydown", /*keydown_handler_1*/ ctx[20]),
+					listen(svelte_element, "keyup", /*keyup_handler_1*/ ctx[21]),
+					listen(svelte_element, "mouseenter", /*mouseenter_handler_1*/ ctx[22]),
+					listen(svelte_element, "mouseleave", /*mouseleave_handler_1*/ ctx[23]),
+					listen(svelte_element, "mousedown", /*mousedown_handler_1*/ ctx[24]),
+					listen(svelte_element, "pointerdown", /*pointerdown_handler_1*/ ctx[25]),
+					listen(svelte_element, "mouseup", /*mouseup_handler_1*/ ctx[26]),
+					listen(svelte_element, "pointerup", /*pointerup_handler_1*/ ctx[27])
+				];
+
+				mounted = true;
+			}
+		},
+		p(ctx, dirty) {
+			if (default_slot) {
+				if (default_slot.p && (!current || dirty & /*$$scope*/ 64)) {
+					update_slot_base(
+						default_slot,
+						default_slot_template,
+						ctx,
+						/*$$scope*/ ctx[6],
+						!current
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[6])
+						: get_slot_changes(default_slot_template, /*$$scope*/ ctx[6], dirty, null),
+						null
+					);
+				}
+			}
+
+			set_dynamic_element_data(/*href*/ ctx[1] ? "a" : "button")(svelte_element, svelte_element_data = get_spread_update(svelte_element_levels, [
+				(!current || dirty & /*href, type*/ 6 && svelte_element_type_value !== (svelte_element_type_value = /*href*/ ctx[1] ? undefined : /*type*/ ctx[2])) && { type: svelte_element_type_value },
+				(!current || dirty & /*href*/ 2) && { href: /*href*/ ctx[1] },
+				{ tabindex: "0" },
+				dirty & /*$$restProps*/ 32 && /*$$restProps*/ ctx[5],
+				/*attrs*/ ctx[4]
+			]));
+		},
+		i(local) {
+			if (current) return;
+			transition_in(default_slot, local);
+			current = true;
+		},
+		o(local) {
+			transition_out(default_slot, local);
+			current = false;
+		},
+		d(detaching) {
+			if (detaching) {
+				detach(svelte_element);
+			}
+
+			if (default_slot) default_slot.d(detaching);
+			/*svelte_element_binding_1*/ ctx[29](null);
+			mounted = false;
+			run_all(dispose);
+		}
+	};
+}
+
+// (13:1) <svelte:element   this={href ? "a" : "button"}   bind:this={el}   type={href ? undefined : type}   {href}   on:click   on:change   on:keydown   on:keyup   on:mouseenter   on:mouseleave   on:mousedown   on:pointerdown   on:mouseup   on:pointerup   tabindex="0"   use:builderActions={{ builders }}   {...getAttrs(builders)}   {...$$restProps}   {...attrs}  >
+function create_dynamic_element(ctx) {
+	let svelte_element;
+	let svelte_element_type_value;
+	let builderActions_action;
+	let current;
+	let mounted;
+	let dispose;
+	const default_slot_template = /*#slots*/ ctx[7].default;
+	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[6], null);
+
+	let svelte_element_levels = [
+		{
+			type: svelte_element_type_value = /*href*/ ctx[1] ? undefined : /*type*/ ctx[2]
+		},
+		{ href: /*href*/ ctx[1] },
+		{ tabindex: "0" },
+		getAttrs(/*builders*/ ctx[3]),
+		/*$$restProps*/ ctx[5],
+		/*attrs*/ ctx[4]
+	];
+
+	let svelte_element_data = {};
+
+	for (let i = 0; i < svelte_element_levels.length; i += 1) {
+		svelte_element_data = assign(svelte_element_data, svelte_element_levels[i]);
+	}
+
+	return {
+		c() {
+			svelte_element = element(/*href*/ ctx[1] ? "a" : "button");
+			if (default_slot) default_slot.c();
+			set_dynamic_element_data(/*href*/ ctx[1] ? "a" : "button")(svelte_element, svelte_element_data);
+		},
+		m(target, anchor) {
+			insert(target, svelte_element, anchor);
+
+			if (default_slot) {
+				default_slot.m(svelte_element, null);
+			}
+
+			/*svelte_element_binding*/ ctx[28](svelte_element);
+			current = true;
+
+			if (!mounted) {
+				dispose = [
+					listen(svelte_element, "click", /*click_handler*/ ctx[8]),
+					listen(svelte_element, "change", /*change_handler*/ ctx[9]),
+					listen(svelte_element, "keydown", /*keydown_handler*/ ctx[10]),
+					listen(svelte_element, "keyup", /*keyup_handler*/ ctx[11]),
+					listen(svelte_element, "mouseenter", /*mouseenter_handler*/ ctx[12]),
+					listen(svelte_element, "mouseleave", /*mouseleave_handler*/ ctx[13]),
+					listen(svelte_element, "mousedown", /*mousedown_handler*/ ctx[14]),
+					listen(svelte_element, "pointerdown", /*pointerdown_handler*/ ctx[15]),
+					listen(svelte_element, "mouseup", /*mouseup_handler*/ ctx[16]),
+					listen(svelte_element, "pointerup", /*pointerup_handler*/ ctx[17]),
+					action_destroyer(builderActions_action = builderActions.call(null, svelte_element, { builders: /*builders*/ ctx[3] }))
+				];
+
+				mounted = true;
+			}
+		},
+		p(ctx, dirty) {
+			if (default_slot) {
+				if (default_slot.p && (!current || dirty & /*$$scope*/ 64)) {
+					update_slot_base(
+						default_slot,
+						default_slot_template,
+						ctx,
+						/*$$scope*/ ctx[6],
+						!current
+						? get_all_dirty_from_scope(/*$$scope*/ ctx[6])
+						: get_slot_changes(default_slot_template, /*$$scope*/ ctx[6], dirty, null),
+						null
+					);
+				}
+			}
+
+			set_dynamic_element_data(/*href*/ ctx[1] ? "a" : "button")(svelte_element, svelte_element_data = get_spread_update(svelte_element_levels, [
+				(!current || dirty & /*href, type*/ 6 && svelte_element_type_value !== (svelte_element_type_value = /*href*/ ctx[1] ? undefined : /*type*/ ctx[2])) && { type: svelte_element_type_value },
+				(!current || dirty & /*href*/ 2) && { href: /*href*/ ctx[1] },
+				{ tabindex: "0" },
+				dirty & /*builders*/ 8 && getAttrs(/*builders*/ ctx[3]),
+				dirty & /*$$restProps*/ 32 && /*$$restProps*/ ctx[5],
+				/*attrs*/ ctx[4]
+			]));
+
+			if (builderActions_action && is_function(builderActions_action.update) && dirty & /*builders*/ 8) builderActions_action.update.call(null, { builders: /*builders*/ ctx[3] });
+		},
+		i(local) {
+			if (current) return;
+			transition_in(default_slot, local);
+			current = true;
+		},
+		o(local) {
+			transition_out(default_slot, local);
+			current = false;
+		},
+		d(detaching) {
+			if (detaching) {
+				detach(svelte_element);
+			}
+
+			if (default_slot) default_slot.d(detaching);
+			/*svelte_element_binding*/ ctx[28](null);
+			mounted = false;
+			run_all(dispose);
+		}
+	};
+}
+
+function create_fragment$1(ctx) {
+	let current_block_type_index;
+	let if_block;
+	let if_block_anchor;
+	let current;
+	const if_block_creators = [create_if_block, create_else_block];
+	const if_blocks = [];
+
+	function select_block_type(ctx, dirty) {
+		if (/*builders*/ ctx[3] && /*builders*/ ctx[3].length) return 0;
+		return 1;
+	}
+
+	current_block_type_index = select_block_type(ctx);
+	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+
+	return {
+		c() {
+			if_block.c();
+			if_block_anchor = empty();
+		},
+		m(target, anchor) {
+			if_blocks[current_block_type_index].m(target, anchor);
+			insert(target, if_block_anchor, anchor);
+			current = true;
+		},
+		p(ctx, [dirty]) {
+			let previous_block_index = current_block_type_index;
+			current_block_type_index = select_block_type(ctx);
+
+			if (current_block_type_index === previous_block_index) {
+				if_blocks[current_block_type_index].p(ctx, dirty);
+			} else {
+				group_outros();
+
+				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+					if_blocks[previous_block_index] = null;
+				});
+
+				check_outros();
+				if_block = if_blocks[current_block_type_index];
+
+				if (!if_block) {
+					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+					if_block.c();
+				} else {
+					if_block.p(ctx, dirty);
+				}
+
+				transition_in(if_block, 1);
+				if_block.m(if_block_anchor.parentNode, if_block_anchor);
+			}
+		},
+		i(local) {
+			if (current) return;
+			transition_in(if_block);
+			current = true;
+		},
+		o(local) {
+			transition_out(if_block);
+			current = false;
+		},
+		d(detaching) {
+			if (detaching) {
+				detach(if_block_anchor);
+			}
+
+			if_blocks[current_block_type_index].d(detaching);
+		}
+	};
+}
+
+function instance$1($$self, $$props, $$invalidate) {
+	const omit_props_names = ["href","type","builders","el"];
+	let $$restProps = compute_rest_props($$props, omit_props_names);
+	let { $$slots: slots = {}, $$scope } = $$props;
+	let { href = void 0 } = $$props;
+	let { type = void 0 } = $$props;
+	let { builders = [] } = $$props;
+	let { el = void 0 } = $$props;
+	const attrs = { "data-button-root": "" };
+
+	function click_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function change_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function keydown_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function keyup_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mouseenter_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mouseleave_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mousedown_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function pointerdown_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mouseup_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function pointerup_handler(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function click_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function change_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function keydown_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function keyup_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mouseenter_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mouseleave_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mousedown_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function pointerdown_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function mouseup_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function pointerup_handler_1(event) {
+		bubble.call(this, $$self, event);
+	}
+
+	function svelte_element_binding($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			el = $$value;
+			$$invalidate(0, el);
+		});
+	}
+
+	function svelte_element_binding_1($$value) {
+		binding_callbacks[$$value ? 'unshift' : 'push'](() => {
+			el = $$value;
+			$$invalidate(0, el);
+		});
+	}
+
+	$$self.$$set = $$new_props => {
+		$$props = assign(assign({}, $$props), exclude_internal_props($$new_props));
+		$$invalidate(5, $$restProps = compute_rest_props($$props, omit_props_names));
+		if ('href' in $$new_props) $$invalidate(1, href = $$new_props.href);
+		if ('type' in $$new_props) $$invalidate(2, type = $$new_props.type);
+		if ('builders' in $$new_props) $$invalidate(3, builders = $$new_props.builders);
+		if ('el' in $$new_props) $$invalidate(0, el = $$new_props.el);
+		if ('$$scope' in $$new_props) $$invalidate(6, $$scope = $$new_props.$$scope);
+	};
+
+	return [
+		el,
+		href,
+		type,
+		builders,
+		attrs,
+		$$restProps,
+		$$scope,
+		slots,
+		click_handler,
+		change_handler,
+		keydown_handler,
+		keyup_handler,
+		mouseenter_handler,
+		mouseleave_handler,
+		mousedown_handler,
+		pointerdown_handler,
+		mouseup_handler,
+		pointerup_handler,
+		click_handler_1,
+		change_handler_1,
+		keydown_handler_1,
+		keyup_handler_1,
+		mouseenter_handler_1,
+		mouseleave_handler_1,
+		mousedown_handler_1,
+		pointerdown_handler_1,
+		mouseup_handler_1,
+		pointerup_handler_1,
+		svelte_element_binding,
+		svelte_element_binding_1
+	];
+}
+
+let Button$1 = class Button extends SvelteComponent {
+	constructor(options) {
+		super();
+		init(this, options, instance$1, create_fragment$1, safe_not_equal, { href: 1, type: 2, builders: 3, el: 0 });
+	}
+};
+
+var Button = /*#__PURE__*/Object.freeze({
+	__proto__: null,
+	Root: Button$1
+});
+
 /* src\App.svelte generated by Svelte v4.2.18 */
+
+function create_default_slot(ctx) {
+	let t;
+
+	return {
+		c() {
+			t = text("Launch Page");
+		},
+		m(target, anchor) {
+			insert(target, t, anchor);
+		},
+		d(detaching) {
+			if (detaching) {
+				detach(t);
+			}
+		}
+	};
+}
 
 function create_fragment(ctx) {
 	let div;
@@ -1137,8 +2235,23 @@ function create_fragment(ctx) {
 	let t1;
 	let p1;
 	let t3;
+	let button;
+	let t4;
+	let input;
+	let t5;
 	let skull;
 	let current;
+	let mounted;
+	let dispose;
+
+	button = new Button({
+			props: {
+				$$slots: { default: [create_default_slot] },
+				$$scope: { ctx }
+			}
+		});
+
+	button.$on("click", /*click_handler*/ ctx[1]);
 	skull = new Skull({});
 
 	return {
@@ -1150,9 +2263,14 @@ function create_fragment(ctx) {
 			p1 = element("p");
 			p1.textContent = "ermmm!";
 			t3 = space();
+			create_component(button.$$.fragment);
+			t4 = space();
+			input = element("input");
+			t5 = space();
 			create_component(skull.$$.fragment);
 			attr(p0, "class", "text-sm");
 			attr(p1, "class", "text-lg");
+			attr(input, "type", "text");
 			attr(div, "class", "flex justify-center bg-gray-300 rounded-lg px-12");
 		},
 		m(target, anchor) {
@@ -1161,16 +2279,40 @@ function create_fragment(ctx) {
 			append(div, t1);
 			append(div, p1);
 			append(div, t3);
+			mount_component(button, div, null);
+			append(div, t4);
+			append(div, input);
+			set_input_value(input, /*text*/ ctx[0]);
+			append(div, t5);
 			mount_component(skull, div, null);
 			current = true;
+
+			if (!mounted) {
+				dispose = listen(input, "input", /*input_input_handler*/ ctx[2]);
+				mounted = true;
+			}
 		},
-		p: noop,
+		p(ctx, [dirty]) {
+			const button_changes = {};
+
+			if (dirty & /*$$scope*/ 8) {
+				button_changes.$$scope = { dirty, ctx };
+			}
+
+			button.$set(button_changes);
+
+			if (dirty & /*text*/ 1 && input.value !== /*text*/ ctx[0]) {
+				set_input_value(input, /*text*/ ctx[0]);
+			}
+		},
 		i(local) {
 			if (current) return;
+			transition_in(button.$$.fragment, local);
 			transition_in(skull.$$.fragment, local);
 			current = true;
 		},
 		o(local) {
+			transition_out(button.$$.fragment, local);
 			transition_out(skull.$$.fragment, local);
 			current = false;
 		},
@@ -1179,17 +2321,51 @@ function create_fragment(ctx) {
 				detach(div);
 			}
 
+			destroy_component(button);
 			destroy_component(skull);
+			mounted = false;
+			dispose();
 		}
 	};
 }
 
 let real = "real";
 
+function launchViewer(url) {
+	try {
+		new URL(url);
+		const tab = window.open('about:blank', '_blank');
+		if (!tab) return;
+		const iframe = tab.document.createElement('iframe');
+		const stl = iframe.style;
+		stl.border = stl.outline = 'none';
+		stl.width = '100vw';
+		stl.height = '100vh';
+		stl.position = 'fixed';
+		stl.left = stl.right = stl.top = stl.bottom = '0';
+		iframe.src = url;
+		tab.document.body.appendChild(iframe);
+	} catch(e) {
+		console.log(e);
+	}
+}
+
+function instance($$self, $$props, $$invalidate) {
+	let text = "";
+	const click_handler = () => launchViewer(text);
+
+	function input_input_handler() {
+		text = this.value;
+		$$invalidate(0, text);
+	}
+
+	return [text, click_handler, input_input_handler];
+}
+
 class App extends SvelteComponent {
 	constructor(options) {
 		super();
-		init(this, options, null, create_fragment, safe_not_equal, {});
+		init(this, options, instance, create_fragment, safe_not_equal, {});
 	}
 }
 
