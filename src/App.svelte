@@ -1,6 +1,5 @@
 <script>
     let real = "real";
-    import "https://cdn.tailwindcss.com";
 </script>
 
 <div class="flex justify-center bg-gray-300 rounded-lg px-12">

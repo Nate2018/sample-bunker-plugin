@@ -1,5 +1,3 @@
-import 'https://cdn.tailwindcss.com';
-
 /** @returns {void} */
 function noop() {}
 
