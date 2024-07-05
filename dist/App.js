@@ -486,7 +486,7 @@ function create_fragment(ctx) {
 			p1.textContent = "ermmm!";
 			attr(p0, "class", "text-sm");
 			attr(p1, "class", "text-lg");
-			attr(div, "class", "flex justify-center bg-gray-900 rounded-lg p-4");
+			attr(div, "class", "flex justify-center bg-gray-300 rounded-lg px-12");
 		},
 		m(target, anchor) {
 			insert(target, div, anchor);
