@@ -28,6 +28,6 @@
 <div class="flex flex-col justify-cente rounded-lg px-12 mt-2 mb-4">
 <div class="flex flex-col">
     <input class="bg-gray-950 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-2" placeholder="URL (not proxied)" bind:value={text} type="text" />
-    <button class="bg-gray-950 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-4" on:click={() => launchViewer(text)}>Go!</button>
+    <button class="bg-gray-950 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-2" on:click={() => launchViewer(text)}>Go!</button>
 </div>
 </div>
