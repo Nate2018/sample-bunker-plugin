@@ -468,20 +468,21 @@ var app = (function () {
 		}
 	}
 
-	const app = new App({
+	const Plugin = {
 	  name: 'Viewer',
 	  id: 'cattn.viewer',
 	  version: '1.0.0',
 	  author: 'cattn',
 	  description: 'Svelte viewer',
 
-	  target: document.body,
-	  props: {
-	    name: 'Viewer',
-	  },
-	});
+	  tile() {
+	    return {
+	      App
+	    }
+	  }
+	};
 
-	return app;
+	return Plugin;
 
 })();
 //# sourceMappingURL=bundle.js.map

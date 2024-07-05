@@ -1,16 +1,17 @@
 import App from './App.svelte';
 
-const app = new App({
+const Plugin = {
   name: 'Viewer',
   id: 'cattn.viewer',
   version: '1.0.0',
   author: 'cattn',
   description: 'Svelte viewer',
 
-  target: document.body,
-  props: {
-    name: 'Viewer',
-  },
-});
+  tile() {
+    return {
+      App
+    }
+  }
+}
 
-export default app;
+export default Plugin;
