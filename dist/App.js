@@ -524,11 +524,9 @@ if (typeof window !== 'undefined')
 
 function create_fragment(ctx) {
 	let div1;
-	let p;
-	let t1;
 	let div0;
 	let input;
-	let t2;
+	let t0;
 	let button;
 	let mounted;
 	let dispose;
@@ -536,30 +534,24 @@ function create_fragment(ctx) {
 	return {
 		c() {
 			div1 = element("div");
-			p = element("p");
-			p.textContent = "ermmm!";
-			t1 = space();
 			div0 = element("div");
 			input = element("input");
-			t2 = space();
+			t0 = space();
 			button = element("button");
 			button.textContent = "Go!";
-			attr(p, "class", "text-lg");
-			attr(input, "class", "bg-gray-900 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-2");
+			attr(input, "class", "bg-gray-950 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-2");
 			attr(input, "placeholder", "URL (not proxied)");
 			attr(input, "type", "text");
-			attr(button, "class", "bg-gray-900 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-4");
+			attr(button, "class", "bg-gray-950 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-4");
 			attr(div0, "class", "flex flex-col");
-			attr(div1, "class", "flex flex-col justify-center bg-gray-700 rounded-lg px-12 mt-2 mb-4");
+			attr(div1, "class", "flex flex-col justify-cente rounded-lg px-12 mt-2 mb-4");
 		},
 		m(target, anchor) {
 			insert(target, div1, anchor);
-			append(div1, p);
-			append(div1, t1);
 			append(div1, div0);
 			append(div0, input);
 			set_input_value(input, /*text*/ ctx[0]);
-			append(div0, t2);
+			append(div0, t0);
 			append(div0, button);
 
 			if (!mounted) {
