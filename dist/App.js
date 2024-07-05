@@ -1180,10 +1180,12 @@ function create_fragment(ctx) {
 			input = element("input");
 			t6 = space();
 			create_component(skull.$$.fragment);
-			attr(p0, "class", "text-sm");
+			attr(p0, "class", "text-sm caret-yellow-500");
 			attr(p1, "class", "text-lg");
+			attr(button, "class", "bg-slate-900 text-white font-bold py-2 px-4 rounded");
+			attr(input, "class", "bg-slate-900 text-white font-bold py-2 px-4 rounded");
 			attr(input, "type", "text");
-			attr(div, "class", "flex justify-center bg-gray-300 rounded-lg px-12");
+			attr(div, "class", "flex flex-col justify-center bg-gray-700 rounded-lg px-12");
 		},
 		m(target, anchor) {
 			insert(target, div, anchor);
