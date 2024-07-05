@@ -4,5 +4,5 @@
     "description": "Sample plugin for Bunker",
     "version": "0.0.1",
     "author": "cattn",
-    "content": "Foo.js"
+    "content": "App.js"
 }
