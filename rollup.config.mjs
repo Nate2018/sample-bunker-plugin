@@ -1,16 +1,16 @@
 // rollup.config.js
 import svelte from 'rollup-plugin-svelte';
-import resolve from '@rollup/plugin-node-resolve';
+import nodeResolve from '@rollup/plugin-node-resolve';
+import replace from '@rollup/plugin-replace';
 import commonjs from '@rollup/plugin-commonjs';
+import esbuild from 'rollup-plugin-esbuild'
 
 const production = !process.env.ROLLUP_WATCH;
 
 export default {
   input: 'src/main.js', 
   output: {
-    sourcemap: true,
-    format: 'iife',
-    name: 'app',
+    format: 'es',
     file: 'build/bundle.js', 
   },
   plugins: [
@@ -19,14 +19,17 @@ export default {
         dev: !production,
       },
     }),
-    resolve({
-      browser: true,
-      dedupe: ['svelte'],
+    esbuild({
+      minify: true
+    }),
+    nodeResolve({
+      extensions: ['.js', '.svelte']
     }),
     commonjs(),
+    replace({
+      preventAssignment: false,
+      'process.env.NODE_ENV': '"development"'
+    })
 
   ],
-  watch: {
-    clearScreen: false,
-  },
 };
