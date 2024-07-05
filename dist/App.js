@@ -544,7 +544,7 @@ function create_fragment(ctx) {
 			attr(input, "type", "text");
 			attr(button, "class", "bg-gray-950 outline-1 outline-gray-950 text-white font-bold py-2 px-4 rounded mb-2");
 			attr(div0, "class", "flex flex-col");
-			attr(div1, "class", "flex flex-col justify-cente rounded-lg px-12 mt-2 mb-4");
+			attr(div1, "class", "flex flex-col justify-cente rounded-lg px-6 mt-2 mb-4");
 		},
 		m(target, anchor) {
 			insert(target, div1, anchor);
