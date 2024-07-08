@@ -5,5 +5,6 @@
     "version": "0.0.1",
     "author": "cattn",
     "content": "App.js",
-    "type": "tile"
+    "type": "tile",
+    "url": "https://raw.githubusercontent.com/Cattn/sample-bunker-plugin/main/dist/"
 }
