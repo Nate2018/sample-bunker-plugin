@@ -1,6 +1,6 @@
 {
-    "name": "Viewer",
-    "id": "cattn.viewer",
+    "name": "Sample Plugin",
+    "id": "cattn.plugin",
     "description": "Sample plugin for Bunker",
     "version": "0.0.1",
     "author": "cattn",

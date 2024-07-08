@@ -1,35 +1,42 @@
-// rollup.config.js
-import svelte from 'rollup-plugin-svelte';
-import nodeResolve from '@rollup/plugin-node-resolve';
-import replace from '@rollup/plugin-replace';
-import commonjs from '@rollup/plugin-commonjs';
-import esbuild from 'rollup-plugin-esbuild'
+import svelte from 'rollup-plugin-svelte'
+import commonjs from '@rollup/plugin-commonjs'
+import resolve from '@rollup/plugin-node-resolve'
+import css from 'rollup-plugin-css-only'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
-const production = !process.env.ROLLUP_WATCH;
+const production = !process.env.ROLLUP_WATCH
+
+const cmp = 'App'
 
 export default {
-  input: 'src/App.svelte', 
+  input: ['src/App.svelte'],
   output: {
     format: 'es',
-    file: 'build/bundle.js', 
+    dir: `dist/`,
+    sourcemap: false,
   },
+
   plugins: [
     svelte({
+      preprocess: vitePreprocess({
+        mode: production ? 'build' : 'dev',
+      }),
+      emitCss: true,
       compilerOptions: {
         dev: !production,
       },
     }),
-    esbuild({
-      minify: true
+    css({
+      output: `${cmp}.css`,
+      plugins: [
+        ('tailwindcss'),
+        ('autoprefixer'),
+      ],
     }),
-    nodeResolve({
-      extensions: ['.js', '.svelte']
+    resolve({
+      browser: true,
+      dedupe: ['svelte'],
     }),
     commonjs(),
-    replace({
-      preventAssignment: false,
-      'process.env.NODE_ENV': '"development"'
-    })
-
   ],
-};
+}
